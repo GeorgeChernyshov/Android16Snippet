@@ -1,5 +1,13 @@
 <resources>
     <string name="app_name">Android16Snippet</string>
+    
+    <!-- behavior changes -->
+    <string name="bc_device_discovery_dialog">Android 16 displays cancelable user dialog</string>
+    <string name="bc_device_discovery_hint">This button starts the discovery of a device. It will fail with a timeout</string>
+    <string name="bc_device_discovery_no_dialog">You should see no dialog until and the search will fail after 20 seconds</string>
+    <string name="bc_device_discovery_start">Start device discovery</string>
+    <string name="bc_predictive_back_for_buttons_not_supported">Predictive back animations only supported for gesture navigation</string>
+    <string name="bc_predictive_back_for_buttons_supported">Android 16 supports predictive back animations for 3 button navigation</string>
 
     <!-- screen labels -->
     <string name="label_behavior_changes">Behavior Changes</string>
