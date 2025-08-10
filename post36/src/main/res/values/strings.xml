@@ -1,6 +1,8 @@
 <resources>
     <string name="app_name">Android16Snippet</string>
-    
+
+    <string name="button_next">Next</string>
+
     <!-- behavior changes -->
     <string name="bc_device_discovery_dialog">Android 16 displays cancelable user dialog</string>
     <string name="bc_device_discovery_hint">This button starts the discovery of a device. It will fail with a timeout</string>
@@ -11,4 +13,5 @@
 
     <!-- screen labels -->
     <string name="label_behavior_changes">Behavior Changes</string>
+    <string name="label_bond_loss_handling">Bond loss handling</string>
 </resources>

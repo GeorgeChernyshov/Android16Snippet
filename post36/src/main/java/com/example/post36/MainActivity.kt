@@ -9,6 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.post36.navigation.Screen
 import com.example.post36.screen.BehaviorChangesScreen
+import com.example.post36.screen.BondLossHandlingScreen
 import com.example.post36.theme.Android16SnippetTheme
 
 class MainActivity : ComponentActivity() {
@@ -29,7 +30,15 @@ class MainActivity : ComponentActivity() {
                 startDestination = Screen.BehaviorChanges
             ) {
                 composable<Screen.BehaviorChanges> {
-                    BehaviorChangesScreen()
+                    BehaviorChangesScreen(
+                        onNextClick = {
+                            navController.navigate(Screen.BondLossHandling)
+                        }
+                    )
+                }
+
+                composable<Screen.BondLossHandling> {
+                    BondLossHandlingScreen()
                 }
             }
         }

@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
@@ -31,7 +32,9 @@ import com.example.post36.theme.Android16SnippetTheme
 import java.util.regex.Pattern
 
 @Composable
-fun BehaviorChangesScreen() {
+fun BehaviorChangesScreen(
+    onNextClick: () -> Unit
+) {
 
     val companionDeviceManager = LocalContext.current
         .getSystemService(
@@ -111,6 +114,10 @@ fun BehaviorChangesScreen() {
                     )
                 }
             )
+
+            Button(onClick = onNextClick) {
+                Text(stringResource(R.string.button_next))
+            }
         }
     }
 }
@@ -120,6 +127,7 @@ fun CompanionAppsBlock(
     startCompanionDevicePairing: () -> Unit
 ) {
     Column(
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(

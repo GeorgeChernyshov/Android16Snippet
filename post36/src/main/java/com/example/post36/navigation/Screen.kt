@@ -12,4 +12,10 @@ sealed class Screen(val route: String, @StringRes val resourceId: Int) {
         route = "behaviorChanges",
         resourceId = R.string.label_behavior_changes
     )
+
+    @Serializable
+    data object BondLossHandling : Screen(
+        route = "bondLossHandling",
+        resourceId = R.string.label_bond_loss_handling
+    )
 }
