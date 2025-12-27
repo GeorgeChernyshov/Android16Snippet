@@ -1,4 +1,4 @@
-package com.example.post36.screen
+package com.example.post36.ui.screen
 
 import android.companion.AssociationRequest
 import android.companion.BluetoothDeviceFilter
@@ -10,7 +10,6 @@ import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,8 +26,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.post36.R
-import com.example.post36.components.AppBar
-import com.example.post36.theme.Android16SnippetTheme
+import com.example.post36.ui.components.AppBar
+import com.example.post36.ui.theme.Android16SnippetTheme
 import java.util.regex.Pattern
 
 @Composable

@@ -1,4 +1,4 @@
-package com.example.post36.theme
+package com.example.post36.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

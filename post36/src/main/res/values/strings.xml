@@ -11,6 +11,11 @@
     <string name="bc_predictive_back_for_buttons_not_supported">Predictive back animations only supported for gesture navigation</string>
     <string name="bc_predictive_back_for_buttons_supported">Android 16 supports predictive back animations for 3 button navigation</string>
 
+    <!-- bond loss -->
+    <string name="bond_loss_selected_description">Selected: %1$s (%2$s)</string>
+    <string name="bond_loss_selected_none">No device selected</string>
+    <string name="bond_loss_selected_unknown">Unknown</string>
+
     <!-- screen labels -->
     <string name="label_behavior_changes">Behavior Changes</string>
     <string name="label_bond_loss_handling">Bond loss handling</string>

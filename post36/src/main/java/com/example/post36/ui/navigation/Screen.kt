@@ -1,4 +1,4 @@
-package com.example.post36.navigation
+package com.example.post36.ui.navigation
 
 import androidx.annotation.StringRes
 import com.example.post36.R

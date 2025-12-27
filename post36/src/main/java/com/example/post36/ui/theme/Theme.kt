@@ -1,4 +1,4 @@
-package com.example.post36.theme
+package com.example.post36.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme

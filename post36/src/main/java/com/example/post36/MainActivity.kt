@@ -7,11 +7,13 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.post36.navigation.Screen
-import com.example.post36.screen.BehaviorChangesScreen
-import com.example.post36.screen.BondLossHandlingScreen
-import com.example.post36.theme.Android16SnippetTheme
+import com.example.post36.ui.navigation.Screen
+import com.example.post36.ui.screen.BehaviorChangesScreen
+import com.example.post36.ui.screen.bondloss.BondLossHandlingScreen
+import com.example.post36.ui.theme.Android16SnippetTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
