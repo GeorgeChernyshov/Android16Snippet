@@ -9,16 +9,12 @@ import android.location.LocationManager
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
-import androidx.compose.runtime.snapshotFlow
 import com.example.post36.ui.screen.bondloss.TAG_BOND_LOSS
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,13 +25,9 @@ class BluetoothAdapterManager @Inject constructor(
 ) {
 
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
-    private var bluetoothAdapterObserver: Job? = null
 
     private val bluetoothManager = context.getSystemService(BluetoothManager::class.java)
     private val bluetoothAdapter = bluetoothManager?.adapter
-
-    private val _isDiscoveringFlow = MutableStateFlow(false)
-    val isDiscoveringFlow = _isDiscoveringFlow.asStateFlow()
 
     private val _events = MutableSharedFlow<Event>()
     val events = _events.asSharedFlow()
@@ -53,7 +45,6 @@ class BluetoothAdapterManager @Inject constructor(
         Log.d(TAG_BOND_LOSS, "  Permissions Granted: true")
         Log.d(TAG_BOND_LOSS, "  Bluetooth Available & Enabled: $btAvailableAndEnabled")
         Log.d(TAG_BOND_LOSS, "  Location Enabled (if required): $locationEnabledForDiscovery")
-        Log.d(TAG_BOND_LOSS, "  Current isDiscovering state (local): ${isDiscoveringFlow.value}")
         Log.d(TAG_BOND_LOSS, "  BluetoothAdapter.isDiscovering (actual): ${bluetoothAdapter?.isDiscovering}")
 
         if (!btAvailableAndEnabled)
@@ -64,9 +55,6 @@ class BluetoothAdapterManager @Inject constructor(
 
             return
         }
-
-        if (isDiscoveringFlow.value)
-            return
 
         coroutineScope.launch {
             _events.emit(Event.DiscoveryStarted)
@@ -126,18 +114,6 @@ class BluetoothAdapterManager @Inject constructor(
                     TAG_BOND_LOSS,
                     "createBond() returned false for ${device.address}"
                 )
-            }
-        }
-    }
-
-    @SuppressLint("MissingPermission")
-    fun observeBluetoothAdapter() {
-        bluetoothAdapterObserver?.cancel()
-        bluetoothAdapterObserver = coroutineScope.launch {
-            snapshotFlow({
-                bluetoothAdapter?.isDiscovering
-            }).collect {
-                _isDiscoveringFlow.value = it ?: false
             }
         }
     }

@@ -6,11 +6,11 @@ import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
-import com.example.post36.domain.bondloss.BluetoothEvent
-import com.example.post36.domain.bondloss.ConnectionStatus
 import com.example.post36.ui.screen.bondloss.TAG_BOND_LOSS
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -22,7 +22,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class BluetoothReceiverManager @Inject constructor() {
+class BluetoothReceiverManager @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
 
     val deviceReceiver = object : BroadcastReceiver() {
 
@@ -47,8 +49,52 @@ class BluetoothReceiverManager @Inject constructor() {
     private val _discoveredDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
     val discoveredDevices = _discoveredDevices.asStateFlow()
 
+    private val _isDiscoveringFlow = MutableStateFlow(false)
+    val isDiscoveringFlow = _isDiscoveringFlow.asStateFlow()
+
     private val _events = MutableSharedFlow<Event>()
     val events = _events.asSharedFlow()
+
+    fun registerReceiver() {
+        val intentFilter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_FOUND)
+            addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
+            addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+            addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA)
+                addAction(BluetoothDevice.ACTION_KEY_MISSING)
+            addAction(BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED)
+        }
+        try {
+            context.registerReceiver(deviceReceiver, intentFilter)
+            Log.d(TAG_BOND_LOSS, "Bluetooth BroadcastReceiver registered.")
+        } catch (e: Exception) {
+            Log.e(
+                TAG_BOND_LOSS,
+                "Failed to register BroadcastReceiver: ${e.message}",
+                e
+            )
+        }
+    }
+
+    fun unregisterReceiver() {
+        try {
+            context.unregisterReceiver(deviceReceiver)
+            Log.d(TAG_BOND_LOSS, "Bluetooth BroadcastReceiver unregistered.")
+        } catch (e: Exception) {
+            Log.e(
+                TAG_BOND_LOSS,
+                "Failed to unregister BroadcastReceiver: ${e.message}",
+                e
+            )
+        }
+    }
+
+    private fun setDiscovering(
+        isDiscovering: Boolean
+    ) = coroutineScope.launch {
+        _isDiscoveringFlow.emit(isDiscovering)
+    }
 
     @SuppressLint("MissingPermission")
     private fun handleBluetoothSearchAction(
@@ -70,12 +116,12 @@ class BluetoothReceiverManager @Inject constructor() {
             BluetoothAdapter.ACTION_DISCOVERY_STARTED -> {
                 Log.d(TAG_BOND_LOSS, "Discovery Started")
                 _discoveredDevices.value = emptyList()
-//                setDiscovering(true)
+                setDiscovering(true)
             }
 
             BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
                 Log.d(TAG_BOND_LOSS, "Discovery Finished")
-//                setDiscovering(false)
+                setDiscovering(false)
             }
 
             BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
