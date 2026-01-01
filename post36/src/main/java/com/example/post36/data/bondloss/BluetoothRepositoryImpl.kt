@@ -4,53 +4,40 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothSocket
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
-import android.location.LocationManager
 import android.os.Build
-import android.provider.Settings
 import android.util.Log
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewModelScope
+import com.example.post36.data.bondloss.BluetoothAdapterManager.Event
 import com.example.post36.domain.bondloss.BluetoothEvent
 import com.example.post36.domain.bondloss.BluetoothRepository
 import com.example.post36.domain.bondloss.BluetoothState
 import com.example.post36.domain.bondloss.ConnectionStatus
 import com.example.post36.ui.screen.bondloss.TAG_BOND_LOSS
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted.Companion.WhileSubscribed
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.IOException
-import java.util.UUID
+import javax.inject.Inject
 import kotlin.collections.plus
 
-class BluetoothRepositoryImpl(
-    private val context: Context
+class BluetoothRepositoryImpl @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val adapterManager: BluetoothAdapterManager,
+    private val connectionManager: BluetoothConnectionManager,
+    private val receiverManager: BluetoothReceiverManager,
+    private val permissionChecker: BluetoothPermissionChecker
 ) : BluetoothRepository {
 
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
-    private var bluetoothAdapterObserver: Job? = null
-    var job: Job? = null
-    var currentSocket: BluetoothSocket? = null
-
-    private val bluetoothManager = context.getSystemService(BluetoothManager::class.java)
-    private val bluetoothAdapter = bluetoothManager?.adapter
 
     private val _state = MutableStateFlow(BluetoothStateImpl())
     override val state = _state
@@ -78,21 +65,6 @@ class BluetoothRepositoryImpl(
     private val _events = MutableSharedFlow<BluetoothEvent>()
     override val events = _events.asSharedFlow()
 
-    private val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        mutableListOf(
-            Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        )
-    } else {
-        mutableListOf(
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        )
-    }.toTypedArray()
-
-
     val deviceReceiver = object : BroadcastReceiver() {
 
         @SuppressLint("MissingPermission")
@@ -112,12 +84,78 @@ class BluetoothRepositoryImpl(
     }
 
     init {
-        if (hasRequiredPermission(Manifest.permission.BLUETOOTH_SCAN))
-            observeBluetoothAdapter()
+        if (permissionChecker.hasPermission(Manifest.permission.BLUETOOTH_SCAN))
+            adapterManager.observeBluetoothAdapter()
+
+        coroutineScope.launch {
+            adapterManager.isDiscoveringFlow
+                .collect {
+                    _state.value = _state.value.copy(isDiscovering = it)
+                }
+        }
+
+        coroutineScope.launch {
+            adapterManager.events.collect { event ->
+                when(event) {
+                    is Event.DiscoveryStarted -> {
+                        _state.value = _state.value.copy(
+                            discoveredDevices = emptyList()
+                        )
+                    }
+                }
+            }
+        }
+
+        coroutineScope.launch {
+            connectionManager.connectionStatus.collect {
+                setConnectionStatus(it)
+            }
+        }
+
+        coroutineScope.launch {
+            receiverManager.discoveredDevices.collect {
+                setDiscoveredDevices(it)
+            }
+        }
+
+        coroutineScope.launch {
+            receiverManager.events.collect { event ->
+                when (event) {
+                    is BluetoothReceiverManager.Event.BondStateChanged -> {
+                        _events.emit(
+                            BluetoothEvent.BondStateChanged(
+                                deviceAddress = event.deviceAddress,
+                                bondState = event.bondState,
+                                previousBondState = event.previousBondState
+                            )
+                        )
+                    }
+
+                    is BluetoothReceiverManager.Event.KeyMissing -> {
+                        _events.emit(
+                            BluetoothEvent.KeyMissing(event.deviceAddress)
+                        )
+                    }
+
+                    is BluetoothReceiverManager.Event.ConnectionStateChanged -> {
+                        val connectionState = event.connectionState
+                        if (connectionState == BluetoothAdapter.STATE_DISCONNECTED) {
+                            val connectionStatus = _state.value.connectionStatus
+                            if (connectionStatus != ConnectionStatus.BOND_LOST &&
+                                connectionStatus != ConnectionStatus.KEY_MISSING
+                            ) {
+
+                                setConnectionStatus(ConnectionStatus.DISCONNECTED)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     override fun setConnectionStatus(bondState: Int) = setConnectionStatus(
-        bondStateToConnectionStatus(bondState)
+        bondState.toConnectionStatus()
     )
 
     override fun setConnectionStatus(
@@ -128,64 +166,26 @@ class BluetoothRepositoryImpl(
         }
     }
 
-    @SuppressLint("MissingPermission")
     override fun startDiscovery() {
-        val permissionsGranted = hasRequiredPermissions(requiredPermissions)
-        val btAvailableAndEnabled = bluetoothAdapter != null && bluetoothAdapter.isEnabled
-        val locationEnabledForDiscovery = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-                    locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-        } else true // Not required for API 31+ for BT scan
-
-        if (!permissionsGranted) {
+        if (!permissionChecker.hasRequiredPermissions()) {
             coroutineScope.launch {
                 _events.emit(
                     BluetoothEvent.MissingPermissions(
-                    getMissingPermissions(requiredPermissions)
-                ))
+                        permissionChecker.getMissingPermissions()
+                    )
+                )
             }
 
             return
         }
 
-        Log.d(TAG_BOND_LOSS, "Discovery button clicked. Pre-checks:")
-        Log.d(TAG_BOND_LOSS, "  Permissions Granted: true")
-        Log.d(TAG_BOND_LOSS, "  Bluetooth Available & Enabled: $btAvailableAndEnabled")
-        Log.d(TAG_BOND_LOSS, "  Location Enabled (if required): $locationEnabledForDiscovery")
-        Log.d(TAG_BOND_LOSS, "  Current isDiscovering state (local): ${state.value.isDiscovering}")
-        Log.d(TAG_BOND_LOSS, "  BluetoothAdapter.isDiscovering (actual): ${bluetoothAdapter?.isDiscovering}")
-
-        if (!btAvailableAndEnabled)
-            return
-
-        if (!locationEnabledForDiscovery) {
-            context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-
-            return
-        }
-
-        if (state.value.isDiscovering)
-            return
-
-        _state.value = _state.value.copy(
-            discoveredDevices = emptyList()
-        )
-
-        val started = bluetoothAdapter.startDiscovery()
-        Log.d(TAG_BOND_LOSS, "Attempting to start discovery. Success: $started")
+        adapterManager.startDiscovery()
     }
 
-    @SuppressLint("MissingPermission")
-    override fun stopDiscovery() {
-        if (hasRequiredPermissions(arrayOf(Manifest.permission.BLUETOOTH_SCAN))) {
-            val cancelled = bluetoothAdapter?.cancelDiscovery()
-            Log.d(TAG_BOND_LOSS, "Attempting to cancel discovery. Success: $cancelled")
-        }
-    }
+    override fun stopDiscovery() = adapterManager.stopDiscovery()
 
     override fun refreshPairedDevices() {
-        val permissionsToRequest = getMissingPermissions(requiredPermissions)
+        val permissionsToRequest = permissionChecker.getMissingPermissions()
 
         if (permissionsToRequest.isNotEmpty()) {
             coroutineScope.launch {
@@ -195,131 +195,27 @@ class BluetoothRepositoryImpl(
             }
 
             return
-        } else {
-            Log.d(TAG_BOND_LOSS, "Initial setup: Permissions already granted.")
-            if (bluetoothAdapter == null) {
-                Log.e(TAG_BOND_LOSS, "Initial setup: BluetoothAdapter is null.")
+        } else Log.d(TAG_BOND_LOSS, "Initial setup: Permissions already granted.")
 
-                return
-            }
-
-            if (!bluetoothAdapter.isEnabled) {
-                Log.w(TAG_BOND_LOSS, "Initial setup: Bluetooth is not enabled.")
-
-                return
-            }
-        }
-
-        try {
-            val currentlyPaired = bluetoothAdapter.bondedDevices
-                ?.toList()
-                ?: emptyList()
-
-            _state.value = _state.value.copy(
-                pairedDevices = currentlyPaired
-            )
-        } catch (se: SecurityException) {
-            Log.e(
-                TAG_BOND_LOSS,
-                "SecurityException getting bonded devices: ${se.message}"
-            )
-        }
+        _state.value = _state.value.copy(
+            pairedDevices = adapterManager.getBondedDevices()
+        )
     }
 
-    @SuppressLint("MissingPermission")
     override fun pairDevice(deviceName: String) {
-        val device = getBluetoothDevice(deviceName)
-
-        if (device == null)
-            return
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (!hasRequiredPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
-                val event = BluetoothEvent.MissingPermissions(
-                    listOf(Manifest.permission.BLUETOOTH_CONNECT)
-                )
-
-                coroutineScope.launch {
-                    _events.emit(event)
-                }
-
-                return
-            }
-        }
-
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled)
-            return
-
-        // Initiate bonding!
-        if (device.bondState == BluetoothDevice.BOND_NONE) {
-            val initiated = device.createBond() // Requires BLUETOOTH_CONNECT
-            if (initiated) {
-                Log.d(
-                    TAG_BOND_LOSS,
-                    "Pairing initiated for ${device.address}"
-                )
-            } else {
-                Log.e(
-                    TAG_BOND_LOSS,
-                    "createBond() returned false for ${device.address}"
-                )
-            }
+        getBluetoothDevice(deviceName)?.let {
+            adapterManager.bondDevice(it)
         }
     }
 
     @SuppressLint("MissingPermission")
     override fun connectToDevice(deviceName: String) {
-        val deviceToConnect = getBluetoothDevice(deviceName)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (!hasRequiredPermission(Manifest.permission.BLUETOOTH_CONNECT)) {
-                val event = BluetoothEvent.MissingPermissions(
-                    listOf(Manifest.permission.BLUETOOTH_CONNECT)
-                )
-
-                coroutineScope.launch {
-                    _events.emit(event)
-                }
-
-                return
-            }
-        }
-
-        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled)
-            return
-
-        if (deviceToConnect == null)
-            return
-
-        if (deviceToConnect.bondState != BluetoothDevice.BOND_BONDED)
-            return
-
-        coroutineScope.launch {
-            _state.value = _state.value.copy(
-                connectionStatus = ConnectionStatus.CONNECTING
-            )
-        }
-
-        job = connectToDevice(
-            coroutineScope,
-            deviceToConnect
-        ) { status, socket, data ->
-            coroutineScope.launch {
-                _state.value = _state.value.copy(
-                    connectionStatus = status
-                )
-            }
-
-            currentSocket = socket
+        getBluetoothDevice(deviceName)?.let {
+            connectionManager.connect(it)
         }
     }
 
-    override fun disconnect() {
-        coroutineScope.launch {
-            job?.cancel()
-            currentSocket?.close()
-        }
-    }
+    override fun disconnect() = connectionManager.disconnect()
 
     override fun registerReceiver() {
         val intentFilter = IntentFilter().apply {
@@ -380,114 +276,6 @@ class BluetoothRepositoryImpl(
     }
 
     @SuppressLint("MissingPermission")
-    private fun observeBluetoothAdapter() {
-        bluetoothAdapterObserver?.cancel()
-        bluetoothAdapterObserver = coroutineScope.launch {
-            snapshotFlow({
-                bluetoothAdapter?.isDiscovering
-            }).collect {
-                _state.value = _state.value.copy(
-                    isDiscovering = (it == true)
-                )
-            }
-        }
-    }
-
-    private fun connectToDevice(
-        scope: CoroutineScope,
-        device: BluetoothDevice,
-        onResult: (
-            status: ConnectionStatus,
-            socket: BluetoothSocket?,
-            data: String?
-        ) -> Unit
-    ): Job {
-        return scope.launch(Dispatchers.IO) {
-            var socket: BluetoothSocket?
-
-            try {
-                withContext(Dispatchers.Main) {
-                    val deviceName = try {
-                        device.name ?: device.address
-                    } catch (e: SecurityException) {
-                        device.address
-                    }
-
-                    onResult(
-                        ConnectionStatus.CONNECTING,
-                        null,
-                        null
-                    )
-                }
-
-                socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
-                Log.d(TAG_BOND_LOSS, "Attempting to connect to ${device.address}...")
-                socket.connect()
-                withContext(Dispatchers.Main) {
-                    onResult(
-                        ConnectionStatus.CONNECTED,
-                        socket,
-                        null
-                    )
-                }
-
-                Log.d(TAG_BOND_LOSS, "Connection successful.")
-
-                val inputStream = socket.inputStream
-                val buffer = ByteArray(1024)
-                var bytes: Int
-
-                // Loop while the socket is connected and the coroutine is still active (not cancelled)
-                while (socket.isConnected && this.isActive) {
-                    try {
-                        bytes = inputStream.read(buffer) // Blocking read
-                        if (bytes == -1) { // End of stream (peer disconnected gracefully)
-                            Log.d(TAG_BOND_LOSS, "Input stream ended (peer disconnected gracefully) for ${device.address}.")
-                            break // Exit loop, connection effectively closed
-                        }
-                        val readMessage = String(buffer, 0, bytes)
-                        Log.d(TAG_BOND_LOSS, "Received from ${device.address}: $readMessage")
-                        withContext(Dispatchers.Main) {
-                            onResult(ConnectionStatus.CONNECTED, socket, readMessage) // Update UI with data
-                        }
-                    } catch (e: IOException) {
-                        Log.e(TAG_BOND_LOSS, "Read/write error during communication with ${device.address}: ${e.message}")
-                        if (this.isActive) { // Check if the job is still active, means error happened unexpectedly
-                            withContext(Dispatchers.Main) {
-                                onResult(ConnectionStatus.DISCONNECTED, null, null)
-                            }
-                        }
-                        break // Exit loop on communication error
-                    }
-                }
-            } catch (se: SecurityException) {
-                Log.e(TAG_BOND_LOSS, "SecurityException during connect: ${se.message}")
-                withContext(Dispatchers.Main) {
-                    onResult(
-                        ConnectionStatus.CONNECTION_FAILED,
-                        null,
-                        null
-                    )
-                }
-            } catch (e: IOException) { // <-- IMPORTANT: CATCH THE IOException HERE
-                // This catches the 'read failed, socket might closed or timeout' and other connection errors
-                Log.e(
-                    TAG_BOND_LOSS,
-                    "IOException during connect to ${device.address}: ${e.message}"
-                )
-
-                withContext(Dispatchers.Main) {
-                    onResult(
-                        ConnectionStatus.CONNECTION_FAILED,
-                        null,
-                        null
-                    )
-                }
-            }
-        }
-    }
-
-    @SuppressLint("MissingPermission")
     private fun handleBluetoothSearchAction(
         intent: Intent,
         deviceFromIntent: BluetoothDevice?
@@ -533,8 +321,8 @@ class BluetoothRepositoryImpl(
                 }
 
                 val logMsg = "ACTION_BOND_STATE_CHANGED for $deviceName: " +
-                        "${bondStateToConnectionStatus(previousBondState)} -> " +
-                        bondStateToConnectionStatus(bondState)
+                        "${previousBondState.toConnectionStatus()} -> " +
+                        bondState.toConnectionStatus()
 
                 Log.d(TAG_BOND_LOSS, logMsg)
 
@@ -585,7 +373,7 @@ class BluetoothRepositoryImpl(
 
     @SuppressLint("MissingPermission")
     private fun handleDeviceFound(device: BluetoothDevice) {
-        if (hasRequiredPermission(
+        if (permissionChecker.hasPermission(
             permission = Manifest.permission.BLUETOOTH_CONNECT
         )) {
             try {
@@ -603,41 +391,12 @@ class BluetoothRepositoryImpl(
         }
     }
 
-    private fun bondStateToConnectionStatus(bondState: Int) = when (bondState) {
-        BluetoothDevice.BOND_NONE -> ConnectionStatus.BOND_NONE
-        BluetoothDevice.BOND_BONDING -> ConnectionStatus.BOND_BONDING
-        BluetoothDevice.BOND_BONDED -> ConnectionStatus.BOND_BONDED
-        BluetoothDevice.ERROR -> ConnectionStatus.ERROR
-        else -> ConnectionStatus.UNKNOWN
-    }
-
     @SuppressLint("MissingPermission")
     private fun getBluetoothDevice(deviceName: String) =
         (_state.value.pairedDevices + _state.value.discoveredDevices)
             .firstOrNull { it.name == deviceName }
 
-    private fun hasRequiredPermission(
-        permission: String
-    ) = hasRequiredPermissions(arrayOf(permission))
-
-    private fun hasRequiredPermissions(
-        permissions: Array<String>
-    ) = getMissingPermissions(permissions).isEmpty()
-
-    private fun getMissingPermissions(
-        permissions: Array<String>
-    ) = permissions.filter {
-        ContextCompat.checkSelfPermission(
-            context,
-            it
-        ) != PackageManager.PERMISSION_GRANTED
-    }
-
     private fun emitEvent(event: BluetoothEvent) = coroutineScope.launch {
         _events.emit(event)
-    }
-
-    companion object {
-        private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     }
 }
