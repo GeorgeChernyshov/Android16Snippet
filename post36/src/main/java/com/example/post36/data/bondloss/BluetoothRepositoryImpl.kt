@@ -109,6 +109,10 @@ class BluetoothRepositoryImpl @Inject constructor(
                     }
 
                     is BluetoothReceiverManager.Event.ConnectionStateChanged -> {
+                        Log.d(TAG_BOND_LOSS, "--- CONNECTION_STATE_CHANGED Broadcast Received ---")
+                        Log.d(TAG_BOND_LOSS, "Device: ${event.deviceName}")
+                        Log.d(TAG_BOND_LOSS, "Connection State: ${event.connectionState}")
+
                         val connectionState = event.connectionState
                         if (connectionState == BluetoothAdapter.STATE_DISCONNECTED) {
                             val connectionStatus = _state.value.connectionStatus
@@ -182,6 +186,11 @@ class BluetoothRepositoryImpl @Inject constructor(
     @SuppressLint("MissingPermission")
     override fun connectToDevice(deviceName: String) {
         getBluetoothDevice(deviceName)?.let {
+            Log.d(TAG_BOND_LOSS, "--- Client Connect Attempt ---")
+            Log.d(TAG_BOND_LOSS, "Device Name: ${it.name}")
+            Log.d(TAG_BOND_LOSS, "Device Address: ${it.address}")
+            Log.d(TAG_BOND_LOSS, "Local Bond State BEFORE connect: ${it.bondState.toConnectionStatus()}")
+
             connectionManager.connect(it)
         }
     }

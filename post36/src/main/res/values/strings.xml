@@ -6,15 +6,34 @@
     <!-- behavior changes -->
     <string name="bc_device_discovery_dialog">Android 16 displays cancelable user dialog</string>
     <string name="bc_device_discovery_hint">This button starts the discovery of a device. It will fail with a timeout</string>
-    <string name="bc_device_discovery_no_dialog">You should see no dialog until and the search will fail after 20 seconds</string>
+    <string name="bc_device_discovery_no_dialog">You should see no dialog and the search will fail after 20 seconds</string>
     <string name="bc_device_discovery_start">Start device discovery</string>
     <string name="bc_predictive_back_for_buttons_not_supported">Predictive back animations only supported for gesture navigation</string>
     <string name="bc_predictive_back_for_buttons_supported">Android 16 supports predictive back animations for 3 button navigation</string>
 
     <!-- bond loss -->
+    <string name="bond_loss_behavior_new">Android 16 improved the bond loss handling to the system. If a previously bonded Bluetooth device could not be authenticated upon reconnection, the system will disconnect the link and retain local bond information</string>
+    <string name="bond_loss_behavior_old">After the bond loss is detected, system would automatically remove the bond and initiate a new pairing process, which could lead to unintentional re-pairing</string>
+    <string name="bond_loss_bluetooth_server_hint">In order to connect to a device, you need to start a Bluetooth server on it. Please do that by pressing the button below</string>
+    <string name="bond_loss_bluetooth_server_start">Start Bluetooth Server</string>
+    <string name="bond_loss_bluetooth_server_stop">Stop Bluetooth Server</string>
+    <string name="bond_loss_connect_to_selected">Connect to Selected</string>
+    <string name="bond_loss_description">Android 16 changed the way bond loss is handled. Install this app on two devices, pair them and establish the connection. Afterwards, unpair the remote device and check logs in order to see the difference Android 16 brought!</string>
+    <string name="bond_loss_discovered_devices">Discovered devices</string>
+    <string name="bond_loss_discovery_start">Start Discovery</string>
+    <string name="bond_loss_discovery_stop">Stop Discovery</string>
+    <string name="bond_loss_pair_selected">Pair Selected</string>
+    <string name="bond_loss_paired_devices">Paired devices</string>
     <string name="bond_loss_selected_description">Selected: %1$s (%2$s)</string>
     <string name="bond_loss_selected_none">No device selected</string>
     <string name="bond_loss_selected_unknown">Unknown</string>
+    <string name="bond_loss_status">Status: %1$s</string>
+
+    <!-- notifications -->
+    <string name="notification_channel_name">Notification Channel</string>
+    <string name="notification_channel_description">Channel description</string>
+    <string name="notification_bluetooth_title">Bluetooth Server</string>
+    <string name="notification_bluetooth_text">Listening for connections...</string>
 
     <!-- screen labels -->
     <string name="label_behavior_changes">Behavior Changes</string>

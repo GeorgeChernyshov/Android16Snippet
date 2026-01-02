@@ -1,18 +1,23 @@
 package com.example.post36.ui.screen.bondloss
 
 import android.annotation.SuppressLint
+import android.os.Build
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -73,6 +78,7 @@ fun BondLossHandlingScreen() {
 
     BondLossHandlingScreenContent(
         state = uiState.value,
+        onToggleServer = viewModel::toggleBluetoothServer,
         onToggleDiscovery = viewModel::toggleDiscovery,
         onDeviceClick = viewModel::selectDevice,
         onPairClick = viewModel::pairDevice,
@@ -82,7 +88,8 @@ fun BondLossHandlingScreen() {
 
 @Composable
 fun BondLossHandlingScreenContent(
-    state: BondLossHandlingScreenState,
+    state: BondLossHandlingScreenUiState,
+    onToggleServer: () -> Unit,
     onToggleDiscovery: () -> Unit,
     onDeviceClick: (BluetoothDeviceUiState) -> Unit,
     onPairClick: () -> Unit,
@@ -94,33 +101,69 @@ fun BondLossHandlingScreenContent(
         modifier = Modifier.safeDrawingPadding(),
         topBar = { AppBar(name = stringResource(R.string.label_bond_loss_handling)) }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
-                .padding(paddingValues)
-                .padding(16.dp),
+                .padding(paddingValues),
+            contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Reminder to finish this later")
-            Text(state.getSelectedDeviceDescription(context))
-            Text("Status: ${state.connectionStatus}")
+            item {
+                Text(stringResource(R.string.bond_loss_description))
+            }
 
-            Button(onClick = onToggleDiscovery) {
-                Text(
-                    text = if (state.isDiscovering)
-                        "Stop Discovery"
-                    else "Start Discovery"
+            item {
+                Text(text = stringResource(
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA)
+                        R.string.bond_loss_behavior_new
+                    else R.string.bond_loss_behavior_old
+                ))
+            }
+
+            item {
+                Text(state.getSelectedDeviceDescription(context))
+                Text(stringResource(
+                    R.string.bond_loss_status,
+                    state.connectionStatus
+                ))
+            }
+
+            item {
+                Button(onClick = onToggleDiscovery) {
+                    Text(
+                        text = stringResource(
+                            if (state.isDiscovering)
+                                R.string.bond_loss_discovery_stop
+                            else R.string.bond_loss_discovery_start
+                        )
+                    )
+                }
+            }
+
+            item {
+                DeviceConnectionBlock(
+                    pairedDevices = state.pairedDevices,
+                    discoveredDevices = state.discoveredDevices,
+                    onDeviceClick = onDeviceClick,
+                    areButtonsEnabled = state.areButtonsEnabled,
+                    onPairClick = onPairClick,
+                    onConnectClick = onConnectClick
                 )
             }
 
-            DeviceConnectionBlock(
-                pairedDevices = state.pairedDevices,
-                discoveredDevices = state.discoveredDevices,
-                onDeviceClick = onDeviceClick,
-                areButtonsEnabled = state.areButtonsEnabled,
-                onPairClick = onPairClick,
-                onConnectClick = onConnectClick
-            )
+            item {
+                Box(Modifier.fillMaxWidth()
+                    .height(2.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant)
+                )
+            }
+
+            item {
+                BluetoothServerBlock(
+                    bluetoothServerRunning = state.bluetoothServerRunning,
+                    onToggleServer = onToggleServer
+                )
+            }
         }
     }
 }
@@ -141,14 +184,14 @@ fun DeviceConnectionBlock(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Paired devices")
+        Text(stringResource(R.string.bond_loss_paired_devices))
 
         DeviceList(
             devices = pairedDevices,
             onDeviceClick = onDeviceClick
         )
 
-        Text("Discovered devices")
+        Text(stringResource(R.string.bond_loss_discovered_devices))
 
         DeviceList(
             devices = discoveredDevices,
@@ -159,14 +202,38 @@ fun DeviceConnectionBlock(
             onClick = onPairClick,
             enabled = areButtonsEnabled
         ) {
-            Text("Pair Selected")
+            Text(stringResource(R.string.bond_loss_pair_selected))
         }
 
         Button(
             onClick = onConnectClick,
             enabled = areButtonsEnabled
         ) {
-            Text("Connect to Selected")
+            Text(stringResource(R.string.bond_loss_connect_to_selected))
+        }
+    }
+}
+
+@Composable
+fun BluetoothServerBlock(
+    bluetoothServerRunning: Boolean,
+    onToggleServer: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(stringResource(R.string.bond_loss_bluetooth_server_hint))
+
+        Button(onClick = onToggleServer) {
+            Text(text = stringResource(
+                if (bluetoothServerRunning)
+                    R.string.bond_loss_bluetooth_server_stop
+                else R.string.bond_loss_bluetooth_server_start
+            ))
         }
     }
 }
@@ -177,8 +244,8 @@ fun DeviceList(
     devices: List<BluetoothDeviceUiState>,
     onDeviceClick: (BluetoothDeviceUiState) -> Unit
 ) {
-    LazyColumn(Modifier.fillMaxWidth()) {
-        items(devices, key = { it.address })  { device ->
+    Column(Modifier.fillMaxWidth()) {
+        devices.forEach { device ->
             Text(
                 text = device.name,
                 modifier = Modifier
@@ -200,6 +267,17 @@ fun DeviceConnectionBlockPreview() {
             areButtonsEnabled = false,
             onPairClick = {},
             onConnectClick = {}
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun BluetoothServerBlockPreview() {
+    Android16SnippetTheme {
+        BluetoothServerBlock(
+            bluetoothServerRunning = false,
+            onToggleServer = {}
         )
     }
 }

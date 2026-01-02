@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
+import androidx.compose.foundation.gestures.forEach
+import androidx.compose.ui.geometry.isEmpty
 import com.example.post36.ui.screen.bondloss.TAG_BOND_LOSS
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -23,7 +25,8 @@ import javax.inject.Singleton
 
 @Singleton
 class BluetoothReceiverManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val adapterManager: BluetoothAdapterManager
 ) {
 
     val deviceReceiver = object : BroadcastReceiver() {
@@ -141,11 +144,21 @@ class BluetoothReceiverManager @Inject constructor(
                     deviceFromIntent?.address
                 }
 
-                val logMsg = "ACTION_BOND_STATE_CHANGED for $deviceName: " +
-                        "${previousBondState.toConnectionStatus()} -> " +
-                        bondState.toConnectionStatus()
+                Log.d(TAG_BOND_LOSS, "--- BOND_STATE_CHANGED Broadcast Received ---")
+                Log.d(TAG_BOND_LOSS, "Device: ${deviceFromIntent?.name ?: deviceFromIntent?.address}")
+                Log.d(TAG_BOND_LOSS, "Previous Bond State: ${previousBondState.toConnectionStatus()}")
+                Log.d(TAG_BOND_LOSS, "New Bond State: ${previousBondState.toConnectionStatus()}")
 
-                Log.d(TAG_BOND_LOSS, logMsg)
+                // Explicitly list bonded devices from the adapterManager
+                val bondedDevices = adapterManager.getBondedDevices() // Requires BLUETOOTH_CONNECT permission
+                Log.d(TAG_BOND_LOSS, "Bonded devices list AFTER BOND_STATE_CHANGED:")
+                if (bondedDevices.isEmpty()) {
+                    Log.d(TAG_BOND_LOSS, "  (None)")
+                } else {
+                    bondedDevices.forEach { bd ->
+                        Log.d(TAG_BOND_LOSS, "  - ${bd.name ?: bd.address} (Bond State: ${bd.bondState.toConnectionStatus()})")
+                    }
+                }
 
                 emitEvent(
                     Event.BondStateChanged(
@@ -174,12 +187,21 @@ class BluetoothReceiverManager @Inject constructor(
             }
 
             BluetoothAdapter.ACTION_CONNECTION_STATE_CHANGED -> {
+                val deviceName = try {
+                    deviceFromIntent?.name ?: deviceFromIntent?.address
+                } catch (e: SecurityException) {
+                    deviceFromIntent?.address
+                }
+
                 val connectionState = intent.getIntExtra(
                     BluetoothAdapter.EXTRA_CONNECTION_STATE,
                     BluetoothAdapter.ERROR
                 )
 
-                emitEvent(Event.ConnectionStateChanged(connectionState))
+                emitEvent(Event.ConnectionStateChanged(
+                    deviceName = deviceName.orEmpty(),
+                    connectionState = connectionState
+                ))
             }
         }
     }
@@ -210,6 +232,9 @@ class BluetoothReceiverManager @Inject constructor(
         ) : Event()
 
         class KeyMissing(val deviceAddress: String) : Event()
-        class ConnectionStateChanged(val connectionState: Int) : Event()
+        class ConnectionStateChanged(
+            val deviceName: String,
+            val connectionState: Int
+        ) : Event()
     }
 }

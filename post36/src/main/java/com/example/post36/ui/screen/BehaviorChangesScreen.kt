@@ -140,6 +140,8 @@ fun CompanionAppsBlock(
         Button(onClick = startCompanionDevicePairing) {
             Text(text = stringResource(R.string.bc_device_discovery_start))
         }
+
+        Text(stringResource(R.string.bc_device_discovery_hint))
     }
 }
 

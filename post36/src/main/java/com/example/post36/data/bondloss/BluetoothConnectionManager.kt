@@ -19,7 +19,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class BluetoothConnectionManager @Inject constructor() {
+class BluetoothConnectionManager @Inject constructor(
+    private val adapterManager: BluetoothAdapterManager
+) {
 
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
     var job: Job? = null
@@ -86,6 +88,19 @@ class BluetoothConnectionManager @Inject constructor() {
                     TAG_BOND_LOSS,
                     "IOException during connect to ${device.address}: ${e.message}"
                 )
+
+                Log.e(TAG_BOND_LOSS, "Local Bond State AFTER IOException: ${device.bondState.toConnectionStatus()}")
+
+                // Explicitly list bonded devices from the adapterManager
+                val bondedDevices = adapterManager.getBondedDevices() // This requires adapterManager access
+                Log.e(TAG_BOND_LOSS, "Bonded devices list AFTER IOException:")
+                if (bondedDevices.isEmpty()) {
+                    Log.e(TAG_BOND_LOSS, "  (None)")
+                } else {
+                    bondedDevices.forEach { bd ->
+                        Log.e(TAG_BOND_LOSS, "  - ${bd.name ?: bd.address} (Bond State: ${bd.bondState.toConnectionStatus()})")
+                    }
+                }
 
                 _connectionStatus.value = ConnectionStatus.CONNECTION_FAILED
                 currentSocket = null

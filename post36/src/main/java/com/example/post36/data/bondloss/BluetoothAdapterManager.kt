@@ -26,7 +26,10 @@ class BluetoothAdapterManager @Inject constructor(
 
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
 
-    private val bluetoothManager = context.getSystemService(BluetoothManager::class.java)
+    private val bluetoothManager by lazy {
+        context.getSystemService(BluetoothManager::class.java)
+    }
+
     private val bluetoothAdapter = bluetoothManager?.adapter
 
     private val _events = MutableSharedFlow<Event>()

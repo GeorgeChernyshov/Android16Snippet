@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.post36.domain.bondloss.BluetoothEvent
 import com.example.post36.domain.bondloss.BluetoothRepository
+import com.example.post36.domain.bondloss.BluetoothServerRepository
 import com.example.post36.domain.bondloss.BluetoothState
 import com.example.post36.domain.bondloss.ConnectionStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,15 +13,17 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class BondLossHandlingScreenViewModel @Inject constructor(
-    private val bluetoothRepository: BluetoothRepository
+    private val bluetoothRepository: BluetoothRepository,
+    private val bluetoothServerRepository: BluetoothServerRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(BondLossHandlingScreenState())
+    private val _uiState = MutableStateFlow(BondLossHandlingScreenUiState())
     val uiState = _uiState.asStateFlow()
 
     private val _events = MutableSharedFlow<BondLossHandlingEvent>()
@@ -28,7 +31,21 @@ class BondLossHandlingScreenViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            bluetoothRepository.state.collect(::handleState)
+            combine(
+                bluetoothRepository.state,
+                bluetoothServerRepository.isServerRunning
+            ) { bluetoothState, bluetoothServerRunning ->
+                BondLossHandlingScreenUiState(
+                    discoveredDevices = bluetoothState.discoveredDevices
+                        .map { BluetoothDeviceUiState.from(it) },
+                    pairedDevices = bluetoothState.pairedDevices
+                        .map { BluetoothDeviceUiState.from(it) },
+                    selectedDevice = _uiState.value.selectedDevice,
+                    connectionStatus = bluetoothState.connectionStatus,
+                    isDiscovering = bluetoothState.isDiscovering,
+                    bluetoothServerRunning = bluetoothServerRunning
+                )
+            }.collect { _uiState.value = it }
         }
 
         viewModelScope.launch {
@@ -60,6 +77,12 @@ class BondLossHandlingScreenViewModel @Inject constructor(
 
     fun registerBluetoothReceiver() = bluetoothRepository.registerReceiver()
     fun unregisterBluetoothReceiver() = bluetoothRepository.unregisterReceiver()
+
+    fun toggleBluetoothServer() {
+        if (uiState.value.bluetoothServerRunning)
+            bluetoothServerRepository.stopServer()
+        else bluetoothServerRepository.startServer()
+    }
 
     private fun handleEvent(event: BluetoothEvent) {
         when (event) {
@@ -109,18 +132,5 @@ class BondLossHandlingScreenViewModel @Inject constructor(
                 selectDevice(null)
             }
         }
-    }
-
-    private fun handleState(
-        state: BluetoothState
-    ) = viewModelScope.launch {
-        _uiState.value = _uiState.value.copy(
-            discoveredDevices = state.discoveredDevices
-                .map { BluetoothDeviceUiState.from(it) },
-            pairedDevices = state.pairedDevices
-                .map { BluetoothDeviceUiState.from(it) },
-            connectionStatus = state.connectionStatus,
-            isDiscovering = state.isDiscovering
-        )
     }
 }

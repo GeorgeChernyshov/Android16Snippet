@@ -1,17 +1,17 @@
 package com.example.post36.ui.screen.bondloss
 
-import android.bluetooth.BluetoothDevice
 import android.content.Context
 import com.example.post36.R
 import com.example.post36.domain.bondloss.ConnectionStatus
 
-data class BondLossHandlingScreenState(
+data class BondLossHandlingScreenUiState(
     val discoveredDevices: List<BluetoothDeviceUiState> = emptyList(),
     val pairedDevices: List<BluetoothDeviceUiState> = emptyList(),
     val selectedDevice: BluetoothDeviceUiState? = null,
     // Not sure if needed
     val connectionStatus: ConnectionStatus = ConnectionStatus.NOT_CONNECTED,
-    val isDiscovering: Boolean = false
+    val isDiscovering: Boolean = false,
+    val bluetoothServerRunning: Boolean = false
 ) {
     val areButtonsEnabled
         get() = selectedDevice != null && (connectionStatus != ConnectionStatus.CONNECTING)
